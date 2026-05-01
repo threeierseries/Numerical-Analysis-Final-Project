@@ -77,7 +77,80 @@ def forward_euler_plot():
     # Display
     plt.show()
 
+# Classical fourth-order Runge-Kutta method for solving IVP
+# Inputs:
+#   f = function defining u'(t) = f(t, u)
+#   a = time interval left endpoint
+#   b = time interval right endpoint
+#   h = step size
+#   u0 = initial condition
+# Outputs:
+#   t = time point array
+#   w = array of RK4 approximations at each time point
+def runge_katta_4th_order(f, a, b, h, u0):
+
+    # Compute the number of time steps
+    N = int((b - a) / h)
+
+    # Create the time grid t_0, t_1, ..., t_N
+    t = np.linspace(a, b, N + 1)
+
+    # Initialize the numerical solution array w[n] which will approximate u(t[n])
+    w = np.zeros(N + 1)
+
+    # Apply the initial condition
+    w[0] = u0
+
+    # RK4 iteration
+    for n in range(N):
+        k1 = f(t[n], w[n])
+        k2 = f(t[n] + h/2, w[n] + (h/2)*k1)
+        k3 = f(t[n] + h/2, w[n] + (h/2)*k2)
+        k4 = f(t[n] + h, w[n] + h*k3)
+
+        w[n + 1] = w[n] + (h/6)*(k1 + 2*k2 + 2*k3 + k4)
+
+    return t, w
+
+
+# Computes the RK4 approximation with h = 0.01 and plots it with the exact solution
+def runge_katta_4th_order_plot():
+
+    # Problem interval and step size
+    a = 0.0
+    b = 5.0
+    h = 0.01
+
+    # Initial condition u(0) = 0
+    u0 = 0.0
+
+    # Computes the RK4 approximation
+    t, w = runge_katta_4th_order(f, a, b, h, u0)
+
+    # Evaluate the exact solution
+    u_exact = exact(t)
+
+    # Plot the exact solution and the numerical approximation
+    plt.figure(figsize=(8, 5))
+    plt.plot(t, u_exact, label="Exact solution", linewidth=2)
+    plt.plot(t, w, "--", label="RK4, h = 0.01", linewidth=2)
+
+    # Make the plot labels
+    plt.xlabel("t", fontsize=14)
+    plt.ylabel("u(t)", fontsize=14)
+    plt.title("First-Order ODE RK4 Approximation", fontsize=15)
+    plt.legend(fontsize=12)
+
+    # Adjust the layout so labels and title fit nicely
+    plt.tight_layout()
+
+    # Save the figure as a PNG file for the report
+    plt.savefig("ode_rk4_h001.png", dpi=300, bbox_inches="tight")
+
+    # Display the plot
+    plt.show()
 
 # Main Guard
 if __name__ == "__main__":
-    forward_euler_plot()
+    #forward_euler_plot()
+    runge_katta_4th_order_plot()
