@@ -595,6 +595,109 @@ def run_problem_14_epsilon_sweep():
 
     return epsilons, final_losses, max_errors, wall_times
 
+def evaluate_heat_rel_l2(model, exact_fn, ntest=100):
+    """Compute relative L2 error for the heat equation on a ntest x ntest grid."""
+    x = np.linspace(0, 1, ntest)
+    t = np.linspace(0, 0.5, ntest)
+    X, T = np.meshgrid(x, t)
+
+    xt = np.column_stack([X.ravel(), T.ravel()])
+    xt_t = torch.tensor(xt, dtype=torch.float32, device=device)
+
+    with torch.no_grad():
+        u_pred = model(xt_t).cpu().numpy().reshape(ntest, ntest)
+
+    u_ex = exact_fn(X, T)
+
+    rel_l2 = np.sqrt(np.sum((u_pred - u_ex) ** 2)) / np.sqrt(np.sum(u_ex ** 2))
+    return rel_l2
+
+def print_problem_24_comparison(
+    heat_ad_final_loss,
+    heat_ad_rel_l2,
+    heat_ad_time,
+    heat_fdm_final_loss,
+    heat_fdm_rel_l2,
+    heat_fdm_time
+):
+    """Print comparison table for Problem 2.4(a)."""
+    print("\nProblem 2.4(a): Heat AD-PINN vs Heat FDM-PINN")
+    print(f"{'Method':<15} {'Final Loss':<18} {'Relative L2 Error':<20} {'Time (s)':<12}")
+    print("-" * 75)
+    print(f"{'AD-PINN':<15} {heat_ad_final_loss:<18.6e} {heat_ad_rel_l2:<20.6e} {heat_ad_time:<12.2f}")
+    print(f"{'FDM-PINN':<15} {heat_fdm_final_loss:<18.6e} {heat_fdm_rel_l2:<20.6e} {heat_fdm_time:<12.2f}")
+
+def train_heat_fdm_for_epsilon(epsilon, epochs=20000):
+    """Train one heat FDM-PINN for a given epsilon and return final loss, relative L2 error, and time."""
+    model = PINN(input_dim=2, hidden_dim=32, num_layers=3).to(device)
+
+    loss_history, wall_time = train_pinn(
+        model,
+        lambda m: compute_loss_heat_fdm(m, epsilon=epsilon),
+        epochs=epochs,
+        lr=1e-3,
+        log_every=2000
+    )
+
+    final_loss = loss_history[-1]
+    rel_l2 = evaluate_heat_rel_l2(
+        model,
+        heat_exact_solution,
+        ntest=100
+    )
+
+    return model, final_loss, rel_l2, wall_time
+
+def run_problem_24_epsilon_sweep():
+    """Train heat FDM-PINN for several epsilon values and plot relative L2 error vs epsilon."""
+    epsilons = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+
+    final_losses = []
+    rel_l2_errors = []
+    wall_times = []
+
+    print("\nProblem 2.4(b): Heat FDM epsilon sweep")
+    print(f"{'epsilon':<12} {'Final Loss':<18} {'Relative L2 Error':<20} {'Time (s)':<12}")
+    print("-" * 75)
+
+    for eps in epsilons:
+        # Reset seeds so each epsilon starts from the same initial random setup
+        torch.manual_seed(42)
+        np.random.seed(42)
+
+        model, final_loss, rel_l2, wall_time = train_heat_fdm_for_epsilon(
+            epsilon=eps,
+            epochs=20000
+        )
+
+        final_losses.append(final_loss)
+        rel_l2_errors.append(rel_l2)
+        wall_times.append(wall_time)
+
+        print(f"{eps:<12.1e} {final_loss:<18.6e} {rel_l2:<20.6e} {wall_time:<12.2f}")
+
+    # Plot relative L2 error vs epsilon
+    plt.figure(figsize=(6, 4))
+    plt.loglog(epsilons, rel_l2_errors, marker="o")
+    plt.xlabel(r"$\epsilon$")
+    plt.ylabel(r"Relative $L^2$ error")
+    plt.title(r"Problem 2.4: Heat FDM-PINN Error vs. $\epsilon$")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("problem_2_4_heat_fdm_epsilon_sweep.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # Save numerical results
+    results = np.column_stack([epsilons, final_losses, rel_l2_errors, wall_times])
+    np.savetxt(
+        "problem_2_4_epsilon_sweep_results.txt",
+        results,
+        header="epsilon final_loss relative_l2_error wall_time_seconds",
+        fmt="%.8e"
+    )
+
+    return epsilons, final_losses, rel_l2_errors, wall_times
+
 if __name__ == "__main__":
     ode_exact = ode_exact_solution
     nu = 0.01
@@ -630,7 +733,7 @@ if __name__ == "__main__":
         ode_fdm_time
     )
     epsilons, final_losses, max_errors, wall_times = run_problem_14_epsilon_sweep()
-    
+    """
     # --- Problem 2.2: Heat with AD ---
     print("\n" + "=" * 50)
     print("Problem 2.2: Heat PINN (Autograd)")
@@ -638,7 +741,7 @@ if __name__ == "__main__":
     heat_ad_model, heat_ad_loss_history, heat_ad_final_loss, heat_ad_rel_l2, heat_ad_time = (
         run_heat_ad()
     )
-    """
+    
     # --- Problem 2.3: Heat with FDM ---
     print("\n" + "=" * 50)
     print("Problem 2.3: Heat PINN (FDM)")
@@ -646,7 +749,24 @@ if __name__ == "__main__":
     heat_fdm_model, heat_fdm_loss_history, heat_fdm_final_loss, heat_fdm_rel_l2, heat_fdm_time = (
         run_heat_fdm()
     )
+    
+    # --- Problem 2.4: Comparison and Stability ---
+    print("\n" + "=" * 50)
+    print("Problem 2.4: Comparison and Stability")
+    print("=" * 50)
 
+    print_problem_24_comparison(
+        heat_ad_final_loss,
+        heat_ad_rel_l2,
+        heat_ad_time,
+        heat_fdm_final_loss,
+        heat_fdm_rel_l2,
+        heat_fdm_time
+    )
+
+    epsilons_heat, heat_final_losses, heat_rel_l2_errors, heat_wall_times = (
+        run_problem_24_epsilon_sweep()
+    )
     # --- Summary ---
     print("\n" + "=" * 50)
     print("SUMMARY")
