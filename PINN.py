@@ -493,7 +493,7 @@ def run_heat_fdm():
     return model, loss_history, final_loss, rel_l2, wall_time
 
 def evaluate_ode_max_error(model, exact_fn, t_range=(0, 5), ntest=1000):
-    """Compute max |u_theta(t) - u(t)| on ntest evenly spaced points."""
+    """Compute max |u_theta(t) - u(t)| on ntest number of evenly spaced points."""
     t = torch.linspace(*t_range, ntest, device=device).unsqueeze(1)
 
     with torch.no_grad():
