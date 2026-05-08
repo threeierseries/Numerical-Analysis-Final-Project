@@ -111,7 +111,34 @@ def compute_loss_ode_ad(model):
     ODE: du/dt = -5u + 5cos(t) - sin(t),  u(0) = 0
 
     """
-    raise NotImplementedError("TODO: implement this")
+    Nr = 500
+
+    # Collocation points sampled uniformly from [0, 5]
+    t_r = 5.0 * torch.rand((Nr, 1), device=device)
+    t_r.requires_grad_(True)
+
+    # Network prediction
+    u = model(t_r)
+
+    # Automatic differentiation: du_theta/dt
+    du_dt = torch.autograd.grad(
+        u,
+        t_r,
+        grad_outputs=torch.ones_like(u),
+        create_graph=True
+    )[0]
+
+    # Residual:
+    # du/dt + 5u - 5cos(t) + sin(t) = 0
+    residual = du_dt + 5.0 * u - 5.0 * torch.cos(t_r) + torch.sin(t_r)
+    loss_r = torch.mean(residual ** 2)
+
+    # Initial condition loss
+    t0 = torch.zeros((1, 1), device=device)
+    u0 = model(t0)
+    loss_ic = torch.mean(u0 ** 2)
+
+    return loss_r + 50.0 * loss_ic
 
 
 def compute_loss_ode_fdm(model, epsilon=1e-3):
@@ -145,9 +172,49 @@ def compute_loss_heat_fdm(model, epsilon=1e-3):
     """
     raise NotImplementedError("TODO: implement this")
 
+def ode_exact_solution(t):
+    """Exact solution."""
+    return np.cos(t) - np.exp(-5.0 * t)
+
+
+def run_ode_ad():
+    """Train and output results for Problem 1.2."""
+    model = PINN(input_dim=1, hidden_dim=32, num_layers=3).to(device)
+
+    loss_history, wall_time = train_pinn(
+        model,
+        compute_loss_ode_ad,
+        epochs=10000,
+        lr=1e-3,
+        log_every=2000
+    )
+
+    # Loss curve, log scale
+    plot_loss_curve(loss_history, title="Problem 1.2: ODE PINN with AD")
+    plt.savefig("problem_1_2_loss_ad.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # PINN prediction vs exact solution and pointwise error
+    max_err = plot_ode_comparison(
+        model,
+        ode_exact_solution,
+        t_range=(0, 5),
+        label="AD-PINN"
+    )
+    plt.savefig("problem_1_2_ode_ad_comparison.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    final_loss = loss_history[-1]
+
+    print("\nProblem 1.2 AD-PINN Summary")
+    print(f"Final training loss: {final_loss:.6e}")
+    print(f"Max absolute error on 1000 test points: {max_err:.6e}")
+    print(f"Wall-clock training time: {wall_time:.2f} seconds")
+
+    return model, loss_history, final_loss, max_err, wall_time
 
 if __name__ == "__main__":
-    ode_exact = NotImplementedError("TODO: implement the exact solution for the ODE")
+    ode_exact = ode_exact_solution
     nu = 0.01
     heat_exact = NotImplementedError("TODO: implement the exact solution for the heat equation")
 
@@ -155,7 +222,9 @@ if __name__ == "__main__":
     print("=" * 50)
     print("Problem 1.2: ODE PINN (Autograd)")
     print("=" * 50)
-   ## TODO: Experiments for Problem 1.2: train the AD-PINN for the ODE, plot loss curve and results
+    ode_ad_model, ode_ad_loss_history, ode_ad_final_loss, ode_ad_error, ode_ad_time = (
+        run_ode_ad()
+    )
 
     # --- Problem 1.3: ODE with FDM ---
     print("\n" + "=" * 50)
