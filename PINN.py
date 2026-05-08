@@ -102,12 +102,15 @@ def plot_heat_comparison(model, exact_fn, label="PINN"):
     return rel_l2
 
 # =============================================================
-# TODO: Implement these four loss functions
+# Loss Functions
 # =============================================================
 
 def compute_loss_ode_ad(model):
     """PINN loss for ODE using AUTOGRAD.
 
+    ODE: du/dt = -5u + 5cos(t) - sin(t),  u(0) = 0
+    IC:  u(0) = 0
+    Loss: L = L_r + 50 L_ic
     """
     Nr = 500
 
@@ -142,6 +145,11 @@ def compute_loss_ode_ad(model):
 def compute_loss_ode_fdm(model, epsilon=1e-3):
     """PINN loss for ODE using FINITE DIFFERENCES.
 
+    ODE: du/dt = -5u + 5cos(t) - sin(t),  u(0) = 0
+    IC:  u(0) = 0
+    Derivative approximation:
+        du/dt(t) ≈ [u(t + epsilon) - u(t - epsilon)] / (2 * epsilon)
+    Loss: L = L_r + 50 L_ic
     """
     Nr = 500
 
@@ -176,8 +184,76 @@ def compute_loss_heat_ad(model):
     IC:  u(x, 0) = sin(pi*x) + 0.5*sin(3*pi*x)
     BC:  u(0, t) = u(1, t) = 0
     """
-    raise NotImplementedError("TODO: implement this")
 
+    nu = 0.01
+    Nr = 10000
+    Nic = 200
+    Nbc = 200
+
+
+    # PDE residual points: (x,t) in (0,1) x (0,0.5]
+    x_r = torch.rand((Nr, 1), device=device)
+    t_r = 0.5 * torch.rand((Nr, 1), device=device)
+
+    x_r.requires_grad_(True)
+    t_r.requires_grad_(True)
+
+    xt_r = torch.cat([x_r, t_r], dim=1)
+    u = model(xt_r)
+
+    # First derivatives
+    grad_u = torch.autograd.grad(
+        u,
+        xt_r,
+        grad_outputs=torch.ones_like(u),
+        create_graph=True
+    )[0]
+
+    u_x = grad_u[:, 0:1]
+    u_t = grad_u[:, 1:2]
+
+    # Second derivative
+    grad_u_x = torch.autograd.grad(
+        u_x,
+        xt_r,
+        grad_outputs=torch.ones_like(u_x),
+        create_graph=True
+    )[0]
+
+    u_xx = grad_u_x[:, 0:1]
+
+    # PDE residual calculated
+    residual = u_t - nu * u_xx
+    loss_r = torch.mean(residual ** 2)
+
+
+    # Initial condition
+    x_ic = torch.rand((Nic, 1), device=device)
+    t_ic = torch.zeros((Nic, 1), device=device)
+
+    xt_ic = torch.cat([x_ic, t_ic], dim=1)
+    u_ic_pred = model(xt_ic)
+
+    u_ic_exact = torch.sin(torch.pi * x_ic) + 0.5 * torch.sin(3.0 * torch.pi * x_ic)
+
+    loss_ic = torch.mean((u_ic_pred - u_ic_exact) ** 2)
+
+
+    # Boundary condition: u(0,t)=0 and u(1,t)=0
+    t_bc = 0.5 * torch.rand((Nbc, 1), device=device)
+
+    x_left = torch.zeros((Nbc, 1), device=device)
+    x_right = torch.ones((Nbc, 1), device=device)
+
+    xt_left = torch.cat([x_left, t_bc], dim=1)
+    xt_right = torch.cat([x_right, t_bc], dim=1)
+
+    u_left = model(xt_left)
+    u_right = model(xt_right)
+
+    loss_bc = torch.mean(u_left ** 2) + torch.mean(u_right ** 2)
+
+    return loss_r + 20.0 * loss_ic + 20.0 * loss_bc
 
 def compute_loss_heat_fdm(model, epsilon=1e-3):
     """PINN loss for heat equation using FINITE DIFFERENCES.
@@ -187,13 +263,87 @@ def compute_loss_heat_fdm(model, epsilon=1e-3):
         u_t(x,t)  ≈ (u(x, t+eps) - u(x, t-eps)) / (2*eps)
         u_xx(x,t) ≈ (u(x+eps, t) - 2*u(x,t) + u(x-eps, t)) / eps^2
     """
-    raise NotImplementedError("TODO: implement this")
 
+    nu = 0.01
+    Nr = 10000
+    Nic = 200
+    Nbc = 200
+
+    # Making sure central-difference stays inside the domain
+    if epsilon <= 0 or epsilon >= 0.25:
+        raise ValueError("epsilon must satisfy 0 < epsilon < 0.25 for this heat equation domain.")
+
+
+    # PDE residual points ensuring keep away from boundary by epsilon
+    x_r = epsilon + (1.0 - 2.0 * epsilon) * torch.rand((Nr, 1), device=device)
+    t_r = epsilon + (0.5 - 2.0 * epsilon) * torch.rand((Nr, 1), device=device)
+
+    # Network evaluations for finite differences
+    xt = torch.cat([x_r, t_r], dim=1)
+
+    xt_t_plus = torch.cat([x_r, t_r + epsilon], dim=1)
+    xt_t_minus = torch.cat([x_r, t_r - epsilon], dim=1)
+
+    xt_x_plus = torch.cat([x_r + epsilon, t_r], dim=1)
+    xt_x_minus = torch.cat([x_r - epsilon, t_r], dim=1)
+
+    u = model(xt)
+    u_t_plus = model(xt_t_plus)
+    u_t_minus = model(xt_t_minus)
+    u_x_plus = model(xt_x_plus)
+    u_x_minus = model(xt_x_minus)
+
+    # Central difference approximations
+    u_t_fd = (u_t_plus - u_t_minus) / (2.0 * epsilon)
+    u_xx_fd = (u_x_plus - 2.0 * u + u_x_minus) / (epsilon ** 2)
+
+    # PDE residual
+    residual = u_t_fd - nu * u_xx_fd
+    loss_r = torch.mean(residual ** 2)
+
+
+    # Initial condition: u(x,0) = sin(pi x) + 0.5 sin(3 pi x)
+    x_ic = torch.rand((Nic, 1), device=device)
+    t_ic = torch.zeros((Nic, 1), device=device)
+
+    xt_ic = torch.cat([x_ic, t_ic], dim=1)
+    u_ic_pred = model(xt_ic)
+
+    u_ic_exact = torch.sin(torch.pi * x_ic) + 0.5 * torch.sin(3.0 * torch.pi * x_ic)
+
+    loss_ic = torch.mean((u_ic_pred - u_ic_exact) ** 2)
+
+
+    # Boundary condition: u(0,t)=0 and u(1,t)=0
+    t_bc = 0.5 * torch.rand((Nbc, 1), device=device)
+
+    x_left = torch.zeros((Nbc, 1), device=device)
+    x_right = torch.ones((Nbc, 1), device=device)
+
+    xt_left = torch.cat([x_left, t_bc], dim=1)
+    xt_right = torch.cat([x_right, t_bc], dim=1)
+
+    u_left = model(xt_left)
+    u_right = model(xt_right)
+
+    loss_bc = torch.mean(u_left ** 2) + torch.mean(u_right ** 2)
+
+    return loss_r + 20.0 * loss_ic + 20.0 * loss_bc
+
+
+# Exact Solutions
 def ode_exact_solution(t):
     """Exact solution."""
     return np.cos(t) - np.exp(-5.0 * t)
 
+def heat_exact_solution(x, t, nu=0.01):
+    """Exact solution for the heat equation."""
+    return (
+        np.exp(-nu * np.pi**2 * t) * np.sin(np.pi * x)
+        + 0.5 * np.exp(-9.0 * nu * np.pi**2 * t) * np.sin(3.0 * np.pi * x)
+    )
 
+# Helper Output Functions
 def run_ode_ad():
     """Train and output results for Problem 1.2."""
     model = PINN(input_dim=1, hidden_dim=32, num_layers=3).to(device)
@@ -268,6 +418,79 @@ def run_ode_fdm():
     print(f"Wall-clock training time: {wall_time:.2f} seconds")
 
     return model, loss_history, final_loss, max_err, wall_time
+
+def run_heat_ad():
+    """Train and output results for Problem 2.2."""
+    model = PINN(input_dim=2, hidden_dim=32, num_layers=3).to(device)
+
+    loss_history, wall_time = train_pinn(
+        model,
+        compute_loss_heat_ad,
+        epochs=20000,
+        lr=1e-3,
+        log_every=2000
+    )
+
+    # Loss curve
+    plot_loss_curve(loss_history, title="Problem 2.2: Heat PINN with AD")
+    plt.savefig("problem_2_2_loss_ad.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # Prediction heatmap, exact heatmap, and pointwise error heatmap
+    rel_l2 = plot_heat_comparison(
+        model,
+        heat_exact_solution,
+        label="AD-PINN"
+    )
+    plt.savefig("problem_2_2_heat_ad_comparison.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    final_loss = loss_history[-1]
+
+    print("\nProblem 2.2 AD-PINN Heat Summary")
+    print(f"Final training loss: {final_loss:.6e}")
+    print(f"Relative L2 error on 100 x 100 test grid: {rel_l2:.6e}")
+    print(f"Wall-clock training time: {wall_time:.2f} seconds")
+
+    return model, loss_history, final_loss, rel_l2, wall_time
+
+def run_heat_fdm():
+    """Train and output results for Problem 2.3."""
+    model = PINN(input_dim=2, hidden_dim=32, num_layers=3).to(device)
+
+    epsilon = 1e-3
+
+    loss_history, wall_time = train_pinn(
+        model,
+        lambda m: compute_loss_heat_fdm(m, epsilon=epsilon),
+        epochs=20000,
+        lr=1e-3,
+        log_every=2000
+    )
+
+    # Loss curve
+    plot_loss_curve(loss_history, title="Problem 2.3: Heat PINN with FDM")
+    plt.savefig("problem_2_3_loss_fdm.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # Prediction heatmap, exact heatmap, and pointwise error heatmap
+    rel_l2 = plot_heat_comparison(
+        model,
+        heat_exact_solution,
+        label="FDM-PINN"
+    )
+    plt.savefig("problem_2_3_heat_fdm_comparison.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    final_loss = loss_history[-1]
+
+    print("\nProblem 2.3 FDM-PINN Heat Summary")
+    print(f"Epsilon: {epsilon:.1e}")
+    print(f"Final training loss: {final_loss:.6e}")
+    print(f"Relative L2 error on 100 x 100 test grid: {rel_l2:.6e}")
+    print(f"Wall-clock training time: {wall_time:.2f} seconds")
+
+    return model, loss_history, final_loss, rel_l2, wall_time
 
 def evaluate_ode_max_error(model, exact_fn, t_range=(0, 5), ntest=1000):
     """Compute max |u_theta(t) - u(t)| on ntest evenly spaced points."""
@@ -375,8 +598,8 @@ def run_problem_14_epsilon_sweep():
 if __name__ == "__main__":
     ode_exact = ode_exact_solution
     nu = 0.01
-    heat_exact = NotImplementedError("TODO: implement the exact solution for the heat equation")
-    
+    heat_exact = heat_exact_solution
+    """
     # --- Problem 1.2: ODE with AD ---
     print("=" * 50)
     print("Problem 1.2: ODE PINN (Autograd)")
@@ -407,18 +630,22 @@ if __name__ == "__main__":
         ode_fdm_time
     )
     epsilons, final_losses, max_errors, wall_times = run_problem_14_epsilon_sweep()
-
+    
     # --- Problem 2.2: Heat with AD ---
     print("\n" + "=" * 50)
     print("Problem 2.2: Heat PINN (Autograd)")
     print("=" * 50)
-    ## TODO: Experiments for Problem 2.2: train the AD-PINN for the heat equation, plot loss curve and results
-
+    heat_ad_model, heat_ad_loss_history, heat_ad_final_loss, heat_ad_rel_l2, heat_ad_time = (
+        run_heat_ad()
+    )
+    """
     # --- Problem 2.3: Heat with FDM ---
     print("\n" + "=" * 50)
     print("Problem 2.3: Heat PINN (FDM)")
     print("=" * 50)
-   ## TODO: Experiments for Problem 2.3: train the FDM-PINN for the heat equation, plot loss curve and results
+    heat_fdm_model, heat_fdm_loss_history, heat_fdm_final_loss, heat_fdm_rel_l2, heat_fdm_time = (
+        run_heat_fdm()
+    )
 
     # --- Summary ---
     print("\n" + "=" * 50)
