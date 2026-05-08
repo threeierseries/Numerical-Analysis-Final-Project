@@ -150,7 +150,88 @@ def runge_katta_4th_order_plot():
     # Display the plot
     plt.show()
 
+# Computes the global error
+def global_error(t, w):
+    u_exact = exact(t)
+    error = np.max(np.abs(w - u_exact))
+    return error
+
+
+# Computes the observed convergence order
+def observed_order(error_old, error_new, h_old, h_new):
+    return np.log(error_old / error_new) / np.log(h_old / h_new)
+
+
+# Compare global errors and observed convergence orders
+def convergence_table():
+
+    # Interval and initial condition
+    a = 0.0
+    b = 5.0
+    u0 = 0.0
+
+    # Step sizes 
+    h_values = [0.01, 0.005, 0.001]
+
+    # Store errors 
+    euler_errors = []
+    rk4_errors = []
+
+    # Compute global errors for each h
+    for h in h_values:
+
+        # Forward Euler
+        t_euler, w_euler = forward_euler(f, a, b, h, u0)
+        euler_error = global_error(t_euler, w_euler)
+        euler_errors.append(euler_error)
+
+        # RK4
+        t_rk4, w_rk4 = runge_katta_4th_order(f, a, b, h, u0)
+        rk4_error = global_error(t_rk4, w_rk4)
+        rk4_errors.append(rk4_error)
+
+    # Print table
+    print()
+    print("Part 1.1(c): Global Errors and Observed Convergence Orders")
+    print()
+    print(f"{'h':<12} {'Euler Error':<18} {'Euler Order':<15} {'RK4 Error':<18} {'RK4 Order':<15}")
+    print("-" * 80)
+
+    for i in range(len(h_values)):
+        h = h_values[i]
+
+        if i == 0:
+            euler_order = "--"
+            rk4_order = "--"
+        else:
+            euler_order_value = observed_order(
+                euler_errors[i - 1],
+                euler_errors[i],
+                h_values[i - 1],
+                h_values[i]
+            )
+
+            rk4_order_value = observed_order(
+                rk4_errors[i - 1],
+                rk4_errors[i],
+                h_values[i - 1],
+                h_values[i]
+            )
+
+            euler_order = f"{euler_order_value:.4f}"
+            rk4_order = f"{rk4_order_value:.4f}"
+
+        print(
+            f"{h:<12.5f} "
+            f"{euler_errors[i]:<18.6e} "
+            f"{euler_order:<15} "
+            f"{rk4_errors[i]:<18.6e} "
+            f"{rk4_order:<15}"
+        )
+        
 # Main Guard
 if __name__ == "__main__":
-    #forward_euler_plot()
-    runge_katta_4th_order_plot()
+    # forward_euler_plot()
+    # runge_katta_4th_order_plot()
+
+    convergence_table()
