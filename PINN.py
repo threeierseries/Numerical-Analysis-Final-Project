@@ -1,5 +1,5 @@
 """
-Starter Code: PINN Final Project
+PINN Final Project
 EN 553.481/681 Numerical Analysis
 """
 import time
@@ -108,8 +108,6 @@ def plot_heat_comparison(model, exact_fn, label="PINN"):
 def compute_loss_ode_ad(model):
     """PINN loss for ODE using AUTOGRAD.
 
-    ODE: du/dt = -5u + 5cos(t) - sin(t),  u(0) = 0
-
     """
     Nr = 500
 
@@ -144,13 +142,32 @@ def compute_loss_ode_ad(model):
 def compute_loss_ode_fdm(model, epsilon=1e-3):
     """PINN loss for ODE using FINITE DIFFERENCES.
 
-    Same ODE as above. Instead of autograd, approximate du/dt
-    using the central difference formula:
-
-        du/dt(t) ≈ (u(t + epsilon) - u(t - epsilon)) / (2 * epsilon)
     """
-    raise NotImplementedError("TODO: implement this")
+    Nr = 500
 
+    # Points sampled uniformly from [0, 5]
+    t_r = 5.0 * torch.rand((Nr, 1), device=device)
+
+    # Network predictions
+    u_plus = model(t_r + epsilon)
+    u_minus = model(t_r - epsilon)
+
+    # Central difference approximation to du/dt
+    du_dt_fd = (u_plus - u_minus) / (2.0 * epsilon)
+
+    # Network prediction at t_r
+    u = model(t_r)
+
+    # Residual
+    residual = du_dt_fd + 5.0 * u - 5.0 * torch.cos(t_r) + torch.sin(t_r)
+    loss_r = torch.mean(residual ** 2)
+
+    # Initial condition loss
+    t0 = torch.zeros((1, 1), device=device)
+    u0 = model(t0)
+    loss_ic = torch.mean(u0 ** 2)
+
+    return loss_r + 50.0 * loss_ic
 
 def compute_loss_heat_ad(model):
     """PINN loss for heat equation using AUTOGRAD.
@@ -213,11 +230,153 @@ def run_ode_ad():
 
     return model, loss_history, final_loss, max_err, wall_time
 
+def run_ode_fdm():
+    """Train and output results for Problem 1.3."""
+    model = PINN(input_dim=1, hidden_dim=32, num_layers=3).to(device)
+
+    epsilon = 1e-3
+
+    loss_history, wall_time = train_pinn(
+        model,
+        lambda m: compute_loss_ode_fdm(m, epsilon=epsilon),
+        epochs=10000,
+        lr=1e-3,
+        log_every=2000
+    )
+
+    # Loss curve, log scale
+    plot_loss_curve(loss_history, title="Problem 1.3: ODE PINN with FDM")
+    plt.savefig("problem_1_3_loss_fdm.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # PINN prediction vs exact solution and pointwise error
+    max_err = plot_ode_comparison(
+        model,
+        ode_exact_solution,
+        t_range=(0, 5),
+        label="FDM-PINN"
+    )
+    plt.savefig("problem_1_3_ode_fdm_comparison.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    final_loss = loss_history[-1]
+
+    print("\nProblem 1.3 FDM-PINN Summary")
+    print(f"Epsilon: {epsilon:.1e}")
+    print(f"Final training loss: {final_loss:.6e}")
+    print(f"Max absolute error on 1000 test points: {max_err:.6e}")
+    print(f"Wall-clock training time: {wall_time:.2f} seconds")
+
+    return model, loss_history, final_loss, max_err, wall_time
+
+def evaluate_ode_max_error(model, exact_fn, t_range=(0, 5), ntest=1000):
+    """Compute max |u_theta(t) - u(t)| on ntest evenly spaced points."""
+    t = torch.linspace(*t_range, ntest, device=device).unsqueeze(1)
+
+    with torch.no_grad():
+        u_pred = model(t).cpu().numpy().flatten()
+
+    t_np = t.cpu().numpy().flatten()
+    u_ex = exact_fn(t_np)
+
+    max_err = np.max(np.abs(u_pred - u_ex))
+    return max_err
+
+
+def print_problem_14_comparison(
+    ode_ad_final_loss,
+    ode_ad_error,
+    ode_ad_time,
+    ode_fdm_final_loss,
+    ode_fdm_error,
+    ode_fdm_time
+):
+    """Print comparison table for Problem 1.4(a)."""
+    print("\nProblem 1.4(a): AD-PINN vs FDM-PINN")
+    print(f"{'Method':<15} {'Final Loss':<18} {'Max Abs Error':<18} {'Time (s)':<12}")
+    print("-" * 70)
+    print(f"{'AD-PINN':<15} {ode_ad_final_loss:<18.6e} {ode_ad_error:<18.6e} {ode_ad_time:<12.2f}")
+    print(f"{'FDM-PINN':<15} {ode_fdm_final_loss:<18.6e} {ode_fdm_error:<18.6e} {ode_fdm_time:<12.2f}")
+
+
+def train_ode_fdm_for_epsilon(epsilon, epochs=10000):
+    """Train one FDM-PINN for a given epsilon and return final loss, max error, and time."""
+    model = PINN(input_dim=1, hidden_dim=32, num_layers=3).to(device)
+
+    loss_history, wall_time = train_pinn(
+        model,
+        lambda m: compute_loss_ode_fdm(m, epsilon=epsilon),
+        epochs=epochs,
+        lr=1e-3,
+        log_every=2000
+    )
+
+    final_loss = loss_history[-1]
+    max_err = evaluate_ode_max_error(
+        model,
+        ode_exact_solution,
+        t_range=(0, 5),
+        ntest=1000
+    )
+
+    return model, final_loss, max_err, wall_time
+
+
+def run_problem_14_epsilon_sweep():
+    """Train FDM-PINN for several epsilon values and plot max error vs epsilon."""
+    epsilons = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+
+    final_losses = []
+    max_errors = []
+    wall_times = []
+
+    print("\nProblem 1.4(b): FDM epsilon sweep")
+    print(f"{'epsilon':<12} {'Final Loss':<18} {'Max Abs Error':<18} {'Time (s)':<12}")
+    print("-" * 70)
+
+    for eps in epsilons:
+        # Reset seeds so each epsilon starts from the same initial random setup
+        torch.manual_seed(42)
+        np.random.seed(42)
+
+        model, final_loss, max_err, wall_time = train_ode_fdm_for_epsilon(
+            epsilon=eps,
+            epochs=10000
+        )
+
+        final_losses.append(final_loss)
+        max_errors.append(max_err)
+        wall_times.append(wall_time)
+
+        print(f"{eps:<12.1e} {final_loss:<18.6e} {max_err:<18.6e} {wall_time:<12.2f}")
+
+    # Plot max error vs epsilon
+    plt.figure(figsize=(6, 4))
+    plt.loglog(epsilons, max_errors, marker="o")
+    plt.xlabel(r"$\epsilon$")
+    plt.ylabel(r"Max absolute error")
+    plt.title(r"Problem 1.4: FDM-PINN Error vs. $\epsilon$")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("problem_1_4_fdm_epsilon_sweep.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # Save numerical results in case you want to copy them into Overleaf
+    results = np.column_stack([epsilons, final_losses, max_errors, wall_times])
+    np.savetxt(
+        "problem_1_4_epsilon_sweep_results.txt",
+        results,
+        header="epsilon final_loss max_absolute_error wall_time_seconds",
+        fmt="%.8e"
+    )
+
+    return epsilons, final_losses, max_errors, wall_times
+
 if __name__ == "__main__":
     ode_exact = ode_exact_solution
     nu = 0.01
     heat_exact = NotImplementedError("TODO: implement the exact solution for the heat equation")
-
+    
     # --- Problem 1.2: ODE with AD ---
     print("=" * 50)
     print("Problem 1.2: ODE PINN (Autograd)")
@@ -225,12 +384,29 @@ if __name__ == "__main__":
     ode_ad_model, ode_ad_loss_history, ode_ad_final_loss, ode_ad_error, ode_ad_time = (
         run_ode_ad()
     )
-
+    
     # --- Problem 1.3: ODE with FDM ---
     print("\n" + "=" * 50)
     print("Problem 1.3: ODE PINN (FDM)")
     print("=" * 50)
-    ## TODO: Experiments for Problem 1.3: train the FDM-PINN for the ODE, plot loss curve and results
+    ode_fdm_model, ode_fdm_loss_history, ode_fdm_final_loss, ode_fdm_error, ode_fdm_time = (
+        run_ode_fdm()
+    )
+
+    # --- Problem 1.4: Comparison ---
+    print("\n" + "=" * 50)
+    print("Problem 1.4: Comparison")
+    print("=" * 50)
+
+    print_problem_14_comparison(
+        ode_ad_final_loss,
+        ode_ad_error,
+        ode_ad_time,
+        ode_fdm_final_loss,
+        ode_fdm_error,
+        ode_fdm_time
+    )
+    epsilons, final_losses, max_errors, wall_times = run_problem_14_epsilon_sweep()
 
     # --- Problem 2.2: Heat with AD ---
     print("\n" + "=" * 50)
