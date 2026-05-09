@@ -1,5 +1,6 @@
-# Generated plot/image files
+# Generated plot/image files as well as corresponding folder
 *.png
+Plots/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
