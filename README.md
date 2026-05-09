@@ -53,11 +53,9 @@ It also imports functions from `problem_1_1_classical_methods.py` and `problem_2
 
 The code uses Python 3 and the following packages:
 
-```text
-numpy
-matplotlib
-torch
-```
+- numpy
+- matplotlib
+- torch
 
 Install the required packages as required with pip.
 
@@ -85,32 +83,24 @@ The full `PINN.py` script trains all the necessary neural networks, including th
 
 ## Terminal Output Explanation
 
-During training, the terminal prints progress updates such as:
+During training, the terminal prints progress updates. For example, the terminal may show lines like:
 
-```text
-Epoch 2000/20000, Loss = ...
-Epoch 4000/20000, Loss = ...
-...
-Training time: ...
-```
+- Epoch 2000/20000, Loss = ...
+- Epoch 4000/20000, Loss = ...
 
 These epoch lines show the loss during a single model training run.
 
 For most experiments, the loss is printed every 2000 epochs. For some sweeps in Problem 3(b) and Problem 3(c), such as during 20000-epoch runs, the code prints every 4000 epochs.
 
-After each individual training run finishes, the code prints:
+After each individual training run finishes, the code prints the training time, such as:
 
-```text
-Training time: ...
-```
+- Training time: ...
 
-Then the corresponding table row is printed. For example, in an epsilon sweep, the row containing values such as
+Then the corresponding table row is printed. For example, in an epsilon sweep, the row contains values such as:
 
-```text
-epsilon    Final Loss    Relative L2 Error    Time (s)
-```
+- epsilon, Final Loss, Relative L2 Error, Time (s)
 
-is printed only after that particular epsilon value has finished training.
+This row is printed only after that particular epsilon value has finished training.
 
 As an example, during Problem 2.4(b), the terminal first prints the epoch losses for one epsilon value. After that run finishes, the code prints the final row for that epsilon, including its final loss, relative \(L^2\) error, and training time. Then it moves to the next epsilon value and repeats the process. Once the row appears, that specific run is finished.
 
@@ -128,41 +118,38 @@ Running the scripts creates `.png` plot files and `.txt` result files in the sam
 
 Generated plot files include:
 
-```text
-ode_forward_euler_h001.png
-ode_rk4_h001.png
-heat_forward_euler_heatmap.png
-heat_forward_euler_final_time.png
-problem_1_2_loss_ad.png
-problem_1_2_ode_ad_comparison.png
-problem_1_3_loss_fdm.png
-problem_1_3_ode_fdm_comparison.png
-problem_1_4_fdm_epsilon_sweep.png
-problem_2_2_loss_ad.png
-problem_2_2_heat_ad_comparison.png
-problem_2_3_loss_fdm.png
-problem_2_3_heat_fdm_comparison.png
-problem_2_4_heat_fdm_epsilon_sweep.png
-problem_2_4_cfl_violation_heatmap.png
-problem_3b_ode_collocation_sweep.png
-problem_3b_heat_collocation_sweep.png
-bonus_inverse_heat_loss_ad.png
-bonus_inverse_heat_loss_fdm.png
-bonus_inverse_heat_nu_ad.png
-bonus_inverse_heat_nu_fdm.png
-```
+- ode_forward_euler_h001.png
+- ode_rk4_h001.png
+- heat_forward_euler_heatmap.png
+- heat_forward_euler_final_time.png
+- problem_1_2_loss_ad.png
+- problem_1_2_ode_ad_comparison.png
+- problem_1_3_loss_fdm.png
+- problem_1_3_ode_fdm_comparison.png
+- problem_1_4_fdm_epsilon_sweep.png
+- problem_2_2_loss_ad.png
+- problem_2_2_heat_ad_comparison.png
+- problem_2_3_loss_fdm.png
+- problem_2_3_heat_fdm_comparison.png
+- problem_2_4_heat_fdm_epsilon_sweep.png
+- problem_2_4_cfl_violation_heatmap.png
+- problem_3b_ode_collocation_sweep.png
+- problem_3b_heat_collocation_sweep.png
+- bonus_inverse_heat_loss_ad.png
+- bonus_inverse_heat_loss_fdm.png
+- bonus_inverse_heat_nu_ad.png
+- bonus_inverse_heat_nu_fdm.png
+
 
 Generated text result files include:
 
-```text
-problem_1_4_epsilon_sweep_results.txt
-problem_2_4_epsilon_sweep_results.txt
-problem_3a_error_comparison_table.txt
-problem_3b_ode_collocation_results.txt
-problem_3b_heat_collocation_results.txt
-problem_3c_network_size_results.txt
-bonus_inverse_heat_results.txt
-```
+- problem_1_4_epsilon_sweep_results.txt
+- problem_2_4_epsilon_sweep_results.txt
+- problem_3a_error_comparison_table.txt
+- problem_3b_ode_collocation_results.txt
+- problem_3b_heat_collocation_results.txt
+- problem_3c_network_size_results.txt
+- bonus_inverse_heat_results.txt
 
 For local file management, I organized the generated `.png` and `.txt` output files into a separate `Plots/` folder after running the scripts. The Python scripts themselves save output files to the current working directory. The `Plots/` folder is ignored by `.gitignore`, so it is used for my local organization rather than as a required part of the GitHub submission.
 
