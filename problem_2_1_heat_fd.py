@@ -176,10 +176,131 @@ def heat_results_table():
         f"{l2_error:<18.8e}"
     )
 
+# Forward Euler finite-difference method with CFL violation
+# This is for Problem 2.4(c)
+# Inputs:
+#   nu = diffusion coefficient
+#   Nx = number of spatial subintervals
+#   T = final time
+#   r = stability ratio, chosen to violate the CFL condition
+# Outputs:
+#   x = spatial grid
+#   t = time grid
+#   U = numerical solution array, where U[n,j] approximates u(x_j,t_n)
+#   dx = spatial step size
+#   dt = time step size
+#   r = stability ratio
+#   Nt = number of time steps
+def heat_forward_euler_cfl_violation(nu=0.01, Nx=64, T=0.5, r=0.6):
+
+    # Compute the spatial step size
+    dx = 1.0 / Nx
+
+    # Choose dt so that r = nu*dt/dx^2 = 0.6
+    # This violates the Forward Euler heat equation stability condition r <= 1/2
+    dt = r * dx**2 / nu
+
+    # Compute the number of time steps
+    Nt = int(np.ceil(T / dt))
+
+    # Create the spatial and time grids
+    # The final time may be slightly larger than T because dt is fixed by r = 0.6
+    x = np.linspace(0.0, 1.0, Nx + 1)
+    t = np.arange(Nt + 1) * dt
+
+    # Initialize the numerical solution array
+    U = np.zeros((Nt + 1, Nx + 1))
+
+    # Apply the initial condition
+    U[0, :] = initial_condition(x)
+
+    # Apply the boundary conditions
+    U[:, 0] = 0.0
+    U[:, -1] = 0.0
+
+    # Forward Euler finite-difference iteration
+    for n in range(Nt):
+        U[n + 1, 1:-1] = (
+            U[n, 1:-1]
+            + r * (U[n, 2:] - 2.0 * U[n, 1:-1] + U[n, :-2])
+        )
+
+        # Reapply the boundary conditions
+        U[n + 1, 0] = 0.0
+        U[n + 1, -1] = 0.0
+
+    return x, t, U, dx, dt, r, Nt
+
+# Plots the unstable numerical solution as a heatmap over the (x,t) domain
+def heat_cfl_violation_heatmap_plot():
+
+    # Problem parameters
+    nu = 0.01
+    Nx = 64
+    T = 0.5
+    r_bad = 0.6
+
+    # Compute the finite-difference solution with CFL violation
+    x, t, U, dx, dt, r, Nt = heat_forward_euler_cfl_violation(nu, Nx, T, r_bad)
+
+    # Create meshgrid for plotting
+    X, T_grid = np.meshgrid(x, t)
+
+    # Plot the heatmap
+    plt.figure(figsize=(8, 5))
+    plt.pcolormesh(X, T_grid, U, shading="auto")
+    plt.colorbar(label="u(x,t)")
+
+    # Make the plot labels
+    plt.xlabel("x", fontsize=14)
+    plt.ylabel("t", fontsize=14)
+    plt.title("Heat Equation Forward Euler with CFL Violation", fontsize=15)
+
+    # Adjust the layout
+    plt.tight_layout()
+
+    # Save the figure to put in report
+    plt.savefig("problem_2_4_cfl_violation_heatmap.png", dpi=300, bbox_inches="tight")
+
+    # Display
+    plt.show()
+
+# Prints the grid parameters for the CFL-violating run
+def heat_cfl_violation_results_table():
+
+    # Problem parameters
+    nu = 0.01
+    Nx = 64
+    T = 0.5
+    r_bad = 0.6
+
+    # Compute the finite-difference solution with CFL violation
+    x, t, U, dx, dt, r, Nt = heat_forward_euler_cfl_violation(nu, Nx, T, r_bad)
+
+    # Compute the largest absolute solution value
+    max_abs_value = np.max(np.abs(U))
+
+    # Print table
+    print()
+    print("Problem 2.4(c): Forward Euler Finite-Difference Heat Equation with CFL Violation")
+    print()
+    print(f"{'Delta x':<18} {'Delta t':<18} {'Nt':<10} {'r':<18} {'Final time':<18} {'Max |U|':<18}")
+    print("-" * 105)
+    print(
+        f"{dx:<18.8e} "
+        f"{dt:<18.8e} "
+        f"{Nt:<10d} "
+        f"{r:<18.8e} "
+        f"{t[-1]:<18.8e} "
+        f"{max_abs_value:<18.8e}"
+    )
 
 # Main Guard
 if __name__ == "__main__":
-    heatmap_plot()
-    heat_final_time_plot()
+    #heatmap_plot()
+    #heat_final_time_plot()
 
-    heat_results_table()
+    #heat_results_table()
+
+    heat_cfl_violation_heatmap_plot()
+    heat_cfl_violation_results_table()
