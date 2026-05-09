@@ -8,6 +8,22 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 
+"""I put 1.1 and 2.1 on separate python files when creating this project, 
+   so I import the relevant functions here for Problem 3 when we need to compare
+   
+"""
+from problem_1_1_classical_methods import (
+    f as classical_ode_rhs,
+    forward_euler as classical_forward_euler,
+    runge_katta_4th_order as classical_rk4,
+    global_error as classical_global_error
+)
+
+from problem_2_1_heat_fd import (
+    heat_forward_euler as heat_fd_forward_euler,
+    heat_l2_error as heat_fd_l2_error
+)
+
 torch.manual_seed(42)
 np.random.seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -698,11 +714,119 @@ def run_problem_24_epsilon_sweep():
 
     return epsilons, final_losses, rel_l2_errors, wall_times
 
+def run_classical_ode_methods_for_summary():
+    """Run Problem 1.1 Forward Euler and RK4 for the Section 3(a) summary."""
+    a = 0.0
+    b = 5.0
+    h = 0.01
+    u0 = 0.0
+
+    # Forward Euler
+    t_start = time.time()
+    t_euler, w_euler = classical_forward_euler(classical_ode_rhs, a, b, h, u0)
+    euler_time = time.time() - t_start
+    euler_error = classical_global_error(t_euler, w_euler)
+
+    # RK4
+    t_start = time.time()
+    t_rk4, w_rk4 = classical_rk4(classical_ode_rhs, a, b, h, u0)
+    rk4_time = time.time() - t_start
+    rk4_error = classical_global_error(t_rk4, w_rk4)
+
+    return euler_error, euler_time, rk4_error, rk4_time
+
+
+def run_heat_fd_for_summary():
+    """Run Problem 2.1 Forward Euler finite-difference method for Section 3(a)."""
+    nu = 0.01
+    Nx = 64
+    T = 0.5
+
+    t_start = time.time()
+    x, t, U, dx, dt, r, Nt = heat_fd_forward_euler(nu=nu, Nx=Nx, T=T)
+    heat_fd_time = time.time() - t_start
+
+    heat_fd_error = heat_fd_l2_error(x, U[-1, :], T=T, nu=nu)
+
+    return heat_fd_error, heat_fd_time, dx, dt, r, Nt
+
+
+def print_problem_3a_error_comparison(
+    euler_error,
+    euler_time,
+    rk4_error,
+    rk4_time,
+    ode_ad_error,
+    ode_ad_time,
+    ode_fdm_error,
+    ode_fdm_time,
+    heat_fd_error,
+    heat_fd_time,
+    heat_ad_rel_l2,
+    heat_ad_time,
+    heat_fdm_rel_l2,
+    heat_fdm_time
+):
+    """Print and save the combined error comparison table for Section 3(a)."""
+
+    rows = [
+        ["ODE", "Forward Euler", "Max absolute error", euler_error, euler_time],
+        ["ODE", "RK4", "Max absolute error", rk4_error, rk4_time],
+        ["ODE", "AD-PINN", "Max absolute error", ode_ad_error, ode_ad_time],
+        ["ODE", "FDM-PINN", "Max absolute error", ode_fdm_error, ode_fdm_time],
+        ["Heat", "Forward Euler FD", "L2 error at t=0.5", heat_fd_error, heat_fd_time],
+        ["Heat", "AD-PINN", "Relative L2 error", heat_ad_rel_l2, heat_ad_time],
+        ["Heat", "FDM-PINN", "Relative L2 error", heat_fdm_rel_l2, heat_fdm_time],
+    ]
+
+    print("\nSection 3(a): Error Comparison Across All Methods")
+    print(f"{'Problem':<10} {'Method':<22} {'Error Metric':<25} {'Error':<18} {'Time (s)':<12}")
+    print("-" * 95)
+
+    for problem, method, metric, error, wall_time in rows:
+        print(f"{problem:<10} {method:<22} {metric:<25} {error:<18.6e} {wall_time:<12.2f}")
+
+    # Save as CSV-style text for copying into LaTeX/Overleaf
+    with open("problem_3a_error_comparison_table.txt", "w") as f:
+        f.write("Problem,Method,Error Metric,Error,Time (s)\n")
+        for problem, method, metric, error, wall_time in rows:
+            f.write(f"{problem},{method},{metric},{error:.8e},{wall_time:.8e}\n")
+
+    return rows
+
 if __name__ == "__main__":
     ode_exact = ode_exact_solution
     nu = 0.01
     heat_exact = heat_exact_solution
-    """
+
+    # --- Problem 1.1: Classical ODE methods ---
+    print("\n" + "=" * 50)
+    print("Problem 1.1: Classical ODE Methods")
+    print("=" * 50)
+
+    euler_error, euler_time, rk4_error, rk4_time = run_classical_ode_methods_for_summary()
+
+    print(f"Forward Euler max error: {euler_error:.6e}")
+    print(f"Forward Euler time: {euler_time:.2f} seconds")
+    print(f"RK4 max error: {rk4_error:.6e}")
+    print(f"RK4 time: {rk4_time:.2f} seconds")
+
+
+    # --- Problem 2.1: Heat finite-difference method ---
+    print("\n" + "=" * 50)
+    print("Problem 2.1: Heat Forward Euler FD")
+    print("=" * 50)
+
+    heat_fd_error, heat_fd_time, dx, dt, r, Nt = run_heat_fd_for_summary()
+
+    print(f"dx = {dx:.6e}")
+    print(f"dt = {dt:.6e}")
+    print(f"r = {r:.6e}")
+    print(f"Nt = {Nt}")
+    print(f"Heat FD L2 error at t=0.5: {heat_fd_error:.6e}")
+    print(f"Heat FD time: {heat_fd_time:.2f} seconds")
+
+    
     # --- Problem 1.2: ODE with AD ---
     print("=" * 50)
     print("Problem 1.2: ODE PINN (Autograd)")
@@ -733,7 +857,7 @@ if __name__ == "__main__":
         ode_fdm_time
     )
     epsilons, final_losses, max_errors, wall_times = run_problem_14_epsilon_sweep()
-    """
+    
     # --- Problem 2.2: Heat with AD ---
     print("\n" + "=" * 50)
     print("Problem 2.2: Heat PINN (Autograd)")
@@ -749,7 +873,7 @@ if __name__ == "__main__":
     heat_fdm_model, heat_fdm_loss_history, heat_fdm_final_loss, heat_fdm_rel_l2, heat_fdm_time = (
         run_heat_fdm()
     )
-    
+
     # --- Problem 2.4: Comparison and Stability ---
     print("\n" + "=" * 50)
     print("Problem 2.4: Comparison and Stability")
@@ -767,12 +891,22 @@ if __name__ == "__main__":
     epsilons_heat, heat_final_losses, heat_rel_l2_errors, heat_wall_times = (
         run_problem_24_epsilon_sweep()
     )
-    # --- Summary ---
-    print("\n" + "=" * 50)
-    print("SUMMARY")
-    print("=" * 50)
-    print(f"{'Method':<25} {'Problem':<10} {'Error':<15} {'Time (s)':<10}")
-    print("-" * 60)
-    ## TODO: Print a summary table comparing the 4 methods (ODE-AD, ODE-FDM, Heat-AD, Heat-FDM) in terms of max error and training time.
+
+    problem_3a_rows = print_problem_3a_error_comparison(
+        euler_error,
+        euler_time,
+        rk4_error,
+        rk4_time,
+        ode_ad_error,
+        ode_ad_time,
+        ode_fdm_error,
+        ode_fdm_time,
+        heat_fd_error,
+        heat_fd_time,
+        heat_ad_rel_l2,
+        heat_ad_time,
+        heat_fdm_rel_l2,
+        heat_fdm_time
+    )
 
     print("\nDone! All plots saved.")
