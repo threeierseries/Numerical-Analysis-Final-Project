@@ -163,10 +163,8 @@ For GPU runs, PyTorch CUDA operations may be asynchronous, so exact timing can d
 
 The code sets random seeds using:
 
-```python
-torch.manual_seed(42)
-np.random.seed(42)
-```
+`torch.manual_seed(42)`  
+`np.random.seed(42)`
 
 These seeds help make the experiments more reproducible, but they do not guarantee that every run will produce exactly the same final numbers. PINN training involves random neural-network initialization, random collocation-point sampling, and nonconvex optimization. Results can also vary slightly across CPU/GPU environments, PyTorch versions, and hardware. Small differences in final loss, error, or wall-clock time are expected.
 
