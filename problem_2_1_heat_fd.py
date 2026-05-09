@@ -297,10 +297,10 @@ def heat_cfl_violation_results_table():
 
 # Main Guard
 if __name__ == "__main__":
-    #heatmap_plot()
-    #heat_final_time_plot()
+    heatmap_plot()
+    heat_final_time_plot()
 
-    #heat_results_table()
+    heat_results_table()
 
     heat_cfl_violation_heatmap_plot()
     heat_cfl_violation_results_table()

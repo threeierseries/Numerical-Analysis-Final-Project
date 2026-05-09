@@ -231,7 +231,7 @@ def convergence_table():
         
 # Main Guard
 if __name__ == "__main__":
-    # forward_euler_plot()
-    # runge_katta_4th_order_plot()
+    forward_euler_plot()
+    runge_katta_4th_order_plot()
 
     convergence_table()

@@ -1,6 +1,6 @@
 """
-PINN Final Project
-EN 553.481/681 Numerical Analysis
+Alex Zhu PINN Final Project
+EN 553.481 Numerical Analysis
 """
 import time
 import torch
